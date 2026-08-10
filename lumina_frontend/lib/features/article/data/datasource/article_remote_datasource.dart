@@ -3,6 +3,7 @@ import 'package:image_picker/image_picker.dart';
 
 import '../../../../core/constants/api_constants.dart';
 import '../../../../core/network/dio_client.dart';
+import '../../../../core/network/api_response_parser.dart';
 import '../models/article_model.dart';
 
 class ArticleRemoteDatasource {
@@ -18,12 +19,14 @@ class ArticleRemoteDatasource {
     final response = await _client.get<dynamic>(
       ApiConstants.articlesPreferences,
       query: {
-        if (category != null && category.isNotEmpty) 'category': category,
+        if (category != null && category.isNotEmpty) 'categoryId': category,
         if (query != null && query.isNotEmpty) 'q': query,
         'page': page,
       },
     );
-    return _parseArticleList(response.data);
+    return ApiResponseParser.list(
+      response.data,
+    ).map(ArticleModel.fromJson).toList();
   }
 
   Future<List<ArticleModel>> getMyArticles({int page = 1}) async {
@@ -31,20 +34,16 @@ class ArticleRemoteDatasource {
       ApiConstants.myArticles,
       query: {'page': page},
     );
-    return _parseArticleList(response.data);
+    return ApiResponseParser.list(
+      response.data,
+    ).map(ArticleModel.fromJson).toList();
   }
 
   Future<ArticleModel> getArticle(String id) async {
     final response = await _client.get<Map<String, dynamic>>(
       '${ApiConstants.articles}/$id',
     );
-    final data = Map<String, dynamic>.from(response.data as Map);
-    final envelope = data['data'] is Map
-        ? Map<String, dynamic>.from(data['data'] as Map)
-        : data;
-    final payload = envelope['article'] is Map
-        ? Map<String, dynamic>.from(envelope['article'] as Map)
-        : envelope;
+    final payload = ApiResponseParser.map(response.data, nestedKey: 'article');
     return ArticleModel.fromJson(payload);
   }
 
@@ -68,16 +67,11 @@ class ArticleRemoteDatasource {
         'title': title,
         'content': content,
         'categoryId': categoryId,
-        'featuredImage': ?featuredImageUrl,
+        'featuredImage': featuredImageUrl,
       },
+      
     );
-    final data = Map<String, dynamic>.from(response.data as Map);
-    final envelope = data['data'] is Map
-        ? Map<String, dynamic>.from(data['data'] as Map)
-        : data;
-    final payload = envelope['article'] is Map
-        ? Map<String, dynamic>.from(envelope['article'] as Map)
-        : envelope;
+    final payload = ApiResponseParser.map(response.data, nestedKey: 'article');
     return ArticleModel.fromJson(payload);
   }
 
@@ -106,13 +100,7 @@ class ArticleRemoteDatasource {
         'featuredImage': ?featuredImageUrl,
       },
     );
-    final data = Map<String, dynamic>.from(response.data as Map);
-    final envelope = data['data'] is Map
-        ? Map<String, dynamic>.from(data['data'] as Map)
-        : data;
-    final payload = envelope['article'] is Map
-        ? Map<String, dynamic>.from(envelope['article'] as Map)
-        : envelope;
+    final payload = ApiResponseParser.map(response.data, nestedKey: 'article');
     return ArticleModel.fromJson(payload);
   }
 
@@ -120,47 +108,55 @@ class ArticleRemoteDatasource {
     return _client.delete('${ApiConstants.articles}/$id');
   }
 
-  /// CreatePresignedUploadUrlDto: { contentType, fileName? }
-  /// Uploads image via presigned URL and returns the public URL.
+  /// Uploads image via presigned URL and returns the public CDN URL.
+  ///
+  /// Flow:
+  ///   1. POST /uploads/presigned-url → get uploadUrl + fileUrl
+  ///   2. PUT [uploadUrl] with raw bytes and Content-Type header (no auth)
+  ///   3. Return fileUrl for use in CreateArticleDto / UpdateArticleDto
   Future<String> _uploadImage(XFile image) async {
-    final presignedResponse = await _client.post<Map<String, dynamic>>(
+    // Step 1 — get presigned URL from our API.
+    final presignedResp = await _client.post<Map<String, dynamic>>(
       ApiConstants.presignedUploads,
       data: {
         'contentType': image.mimeType ?? 'image/jpeg',
         'fileName': image.name,
       },
     );
-    final presignedData = Map<String, dynamic>.from(
-      presignedResponse.data as Map,
-    );
-    final uploadUrl = (presignedData['url'] ?? presignedData['uploadUrl'])
-        .toString();
-    final publicUrl = (presignedData['publicUrl'] ??
-            presignedData['fileUrl'] ??
-            uploadUrl.split('?').first)
-        .toString();
-    await Dio().put(
+
+    // Unwrap: response is { message, data: { uploadUrl, fileUrl, key, ... } }
+    final payload = ApiResponseParser.map(presignedResp.data);
+
+    final uploadUrl = (payload['uploadUrl'] ?? payload['url'] ?? '').toString();
+    final fileUrl =
+        (payload['fileUrl'] ??
+                payload['publicUrl'] ??
+                uploadUrl.split('?').first)
+            .toString();
+    final contentType =
+        (payload['contentType'] ?? image.mimeType ?? 'image/jpeg').toString();
+
+    if (uploadUrl.isEmpty) {
+      throw Exception('Presigned upload URL not returned by server');
+    }
+
+    // Step 2 — PUT file bytes directly to S3.
+    // Use a bare Dio (no auth interceptor, no base URL).
+    final s3 = Dio()
+      ..options.validateStatus = (status) =>
+          status != null && status >= 200 && status < 300;
+
+    final bytes = await image.readAsBytes();
+    await s3.put<void>(
       uploadUrl,
-      data: await image.readAsBytes(),
+      data: Stream.fromIterable(bytes.map((b) => [b])),
       options: Options(
-        headers: {'Content-Type': image.mimeType ?? 'image/jpeg'},
+        headers: {'Content-Type': contentType, 'Content-Length': bytes.length},
+        // S3 presigned PUT must not include Authorization header.
+        extra: {'skipAuth': true},
       ),
     );
-    return publicUrl;
-  }
 
-  List<ArticleModel> _parseArticleList(Object? data) {
-    final payload = data is Map && data['data'] is Map
-        ? Map<String, dynamic>.from(data['data'] as Map)
-        : data;
-    final list = payload is Map
-        ? payload['articles'] ?? payload['items'] ?? payload['data']
-        : payload;
-    return ((list ?? const []) as List)
-        .map(
-          (item) =>
-              ArticleModel.fromJson(Map<String, dynamic>.from(item as Map)),
-        )
-        .toList();
+    return fileUrl;
   }
 }

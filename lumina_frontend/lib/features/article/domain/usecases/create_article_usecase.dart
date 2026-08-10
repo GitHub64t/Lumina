@@ -1,5 +1,6 @@
 import 'package:image_picker/image_picker.dart';
 
+import '../../../../shared/models/article.dart';
 import '../repository/article_repository.dart';
 
 class CreateArticleUsecase {
@@ -8,7 +9,7 @@ class CreateArticleUsecase {
   final ArticleRepository _repository;
 
   /// CreateArticleDto: userId, title, content, categoryId, image?
-  Future<void> call({
+  Future<Article> call({
     required String userId,
     required String title,
     required String content,

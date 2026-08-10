@@ -13,10 +13,8 @@ import '../../features/auth/presentation/pages/signup_page.dart';
 import '../../features/auth/presentation/pages/splash_page.dart';
 import '../../features/dashboard/presentation/pages/dashboard_page.dart';
 import '../../features/dashboard/presentation/widgets/app_shell.dart';
-import '../../features/notifications/presentation/pages/notifications_page.dart';
 import '../../features/preferences/presentation/pages/preferences_page.dart';
 import '../../features/profile/presentation/pages/profile_page.dart';
-import '../../features/search/presentation/pages/search_page.dart';
 import '../../features/settings/presentation/pages/settings_page.dart';
 import 'route_guards.dart';
 
@@ -70,15 +68,7 @@ class AppRouter {
           ),
           GoRoute(
             path: '/my-articles',
-            builder: (context, state) => const MyArticlesPage(),
-          ),
-          GoRoute(
-            path: '/search',
-            builder: (context, state) => const SearchPage(),
-          ),
-          GoRoute(
-            path: '/notifications',
-            builder: (context, state) => const NotificationsPage(),
+            builder: (context, state) => const MyArticlesScreen(),
           ),
           GoRoute(
             path: '/preferences',

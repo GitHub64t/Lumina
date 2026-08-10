@@ -20,10 +20,15 @@ class ArticleRepositoryImpl implements ArticleRepository {
   }
 
   @override
+  Future<List<Article>> fetchMyArticles({int page = 1}) {
+    return _remote.getMyArticles(page: page);
+  }
+
+  @override
   Future<Article> getArticle(String id) => _remote.getArticle(id);
 
   @override
-  Future<void> createArticle({
+  Future<Article> createArticle({
     required String userId,
     required String title,
     required String content,
@@ -38,7 +43,7 @@ class ArticleRepositoryImpl implements ArticleRepository {
   );
 
   @override
-  Future<void> editArticle({
+  Future<Article> editArticle({
     required String userId,
     required String id,
     required String title,

@@ -10,10 +10,12 @@ class ResponsivePage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Center(
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: AppSizes.maxContentWidth),
-        child: Padding(padding: padding, child: child),
+    return SafeArea(
+      child: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: AppSizes.maxContentWidth),
+          child: Padding(padding: padding, child: child),
+        ),
       ),
     );
   }

@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
+import 'package:flutter_quill/flutter_quill.dart';
 import 'package:flutter_web_plugins/url_strategy.dart';
 
 import 'core/constants/app_strings.dart';
@@ -43,6 +45,13 @@ class ArticleFeedApp extends StatelessWidget {
             darkTheme: AppTheme.dark,
             themeMode: mode,
             routerConfig: router.router,
+            localizationsDelegates: const [
+              GlobalMaterialLocalizations.delegate,
+              GlobalWidgetsLocalizations.delegate,
+              GlobalCupertinoLocalizations.delegate,
+              FlutterQuillLocalizations.delegate,
+            ],
+            supportedLocales: FlutterQuillLocalizations.supportedLocales,
           ),
         ),
       ),

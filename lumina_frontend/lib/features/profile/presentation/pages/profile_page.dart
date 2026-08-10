@@ -10,6 +10,7 @@ import '../../../../core/utils/session_error_handler.dart';
 import '../../../../injection_container.dart';
 import '../../../../shared/widgets/responsive_page.dart';
 import '../../../auth/presentation/bloc/auth_bloc.dart';
+import '../../data/models/profile_model.dart';
 import '../bloc/profile_cubit.dart';
 
 class ProfilePage extends StatefulWidget {
@@ -37,11 +38,29 @@ class _ProfilePageState extends State<ProfilePage> {
     super.dispose();
   }
 
+  String _getAvatarInitial(ProfileModel? profile) {
+    if (profile != null) {
+      final first = profile.firstName.trim();
+      if (first.isNotEmpty) {
+        return first.characters.first.toUpperCase();
+      }
+      final email = profile.email.trim();
+      if (email.isNotEmpty) {
+        return email.characters.first.toUpperCase();
+      }
+    }
+    return 'A';
+  }
+
   @override
   Widget build(BuildContext context) {
     return BlocProvider(
       create: (_) => sl<ProfileCubit>()..load(),
       child: Scaffold(
+        appBar: AppBar(
+          title: const Text('Edit profile'),
+          centerTitle: false,
+        ),
         body: BlocConsumer<ProfileCubit, ProfileState>(
           listener: (context, state) {
             final profile = state.profile;
@@ -51,16 +70,20 @@ class _ProfilePageState extends State<ProfilePage> {
               _prefilled = true;
             }
             if (state.status == ProfileStatus.updated) {
+              if (profile != null) {
+                _firstName.text = profile.firstName;
+                _lastName.text = profile.lastName;
+              }
               ScaffoldMessenger.of(
                 context,
-              ).showSnackBar(const SnackBar(content: Text('Profile updated')));
+              ).showSnackBar(const SnackBar(content: Text('Profile updated successfully')));
             }
             if (state.status == ProfileStatus.passwordChanged) {
               _oldPassword.clear();
               _newPassword.clear();
               ScaffoldMessenger.of(
                 context,
-              ).showSnackBar(const SnackBar(content: Text('Password changed')));
+              ).showSnackBar(const SnackBar(content: Text('Password changed successfully')));
             }
             if (state.status == ProfileStatus.failure && state.error != null) {
               SessionErrorHandler.handle(context, state.error);
@@ -85,16 +108,12 @@ class _ProfilePageState extends State<ProfilePage> {
 
             final profile = state.profile;
             final userId =
-                context.read<AuthBloc>().state.user?.id ?? '';
+                context.read<AuthBloc>().state.user?.id ?? profile?.id ?? '';
 
             return ResponsivePage(
               child: ListView(
+                padding: const EdgeInsets.only(bottom: 40),
                 children: [
-                  Text(
-                    'Profile',
-                    style: Theme.of(context).textTheme.headlineMedium,
-                  ),
-                  const SizedBox(height: 20),
                   Row(
                     children: [
                       CircleAvatar(
@@ -104,10 +123,11 @@ class _ProfilePageState extends State<ProfilePage> {
                             : NetworkImage(profile!.avatarUrl!),
                         child: profile?.avatarUrl == null
                             ? Text(
-                                (profile?.firstName ?? 'A')
-                                    .characters
-                                    .first
-                                    .toUpperCase(),
+                                _getAvatarInitial(profile),
+                                style: const TextStyle(
+                                  fontSize: 28,
+                                  fontWeight: FontWeight.bold,
+                                ),
                               )
                             : null,
                       ),
@@ -120,10 +140,11 @@ class _ProfilePageState extends State<ProfilePage> {
                               profile?.fullName ?? 'Profile',
                               style: Theme.of(context).textTheme.titleLarge,
                             ),
-                            Text(profile?.email ?? ''),
-                            if (profile?.phone != null)
+                            if (profile?.email != null && profile!.email.isNotEmpty)
+                              Text(profile.email),
+                            if (profile?.phone != null && profile!.phone.isNotEmpty)
                               Text(
-                                profile!.phone,
+                                profile.phone,
                                 style: Theme.of(context).textTheme.bodySmall,
                               ),
                           ],
@@ -131,7 +152,12 @@ class _ProfilePageState extends State<ProfilePage> {
                       ),
                     ],
                   ),
-                  const SizedBox(height: 24),
+                  const SizedBox(height: 28),
+                  Text(
+                    'Personal details',
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
+                  const SizedBox(height: 12),
                   // ── Update profile form ───────────────────────────────────
                   Form(
                     key: _profileFormKey,
@@ -176,12 +202,12 @@ class _ProfilePageState extends State<ProfilePage> {
                       ],
                     ),
                   ),
-                  const SizedBox(height: 32),
+                  const SizedBox(height: 36),
                   Text(
                     'Change password',
-                    style: Theme.of(context).textTheme.titleLarge,
+                    style: Theme.of(context).textTheme.titleMedium,
                   ),
-                  const SizedBox(height: 16),
+                  const SizedBox(height: 12),
                   // ── Change password form ──────────────────────────────────
                   Form(
                     key: _passwordFormKey,

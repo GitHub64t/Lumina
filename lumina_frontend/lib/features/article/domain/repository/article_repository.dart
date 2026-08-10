@@ -8,10 +8,13 @@ abstract class ArticleRepository {
     String? query,
     int page = 1,
   });
+
+  Future<List<Article>> fetchMyArticles({int page = 1});
+
   Future<Article> getArticle(String id);
 
   /// CreateArticleDto fields: userId, title, content, categoryId, image?
-  Future<void> createArticle({
+  Future<Article> createArticle({
     required String userId,
     required String title,
     required String content,
@@ -20,7 +23,7 @@ abstract class ArticleRepository {
   });
 
   /// UpdateArticleDto fields: userId, articleId, title, content, categoryId?, image?
-  Future<void> editArticle({
+  Future<Article> editArticle({
     required String userId,
     required String id,
     required String title,

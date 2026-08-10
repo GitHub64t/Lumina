@@ -15,27 +15,52 @@ class AppNetworkImage extends StatelessWidget {
   final double? width;
   final double borderRadius;
 
+  bool _isValidUrl(String rawUrl) {
+    final trimmed = rawUrl.trim();
+    if (trimmed.isEmpty) return false;
+    final uri = Uri.tryParse(trimmed);
+    return uri != null && (uri.scheme == 'http' || uri.scheme == 'https');
+  }
+
   @override
   Widget build(BuildContext context) {
+    final isValid = _isValidUrl(url);
+
     return ClipRRect(
       borderRadius: BorderRadius.circular(borderRadius),
-      child: CachedNetworkImage(
-        imageUrl: url,
-        height: height,
-        width: width,
-        fit: BoxFit.cover,
-        placeholder: (context, url) => Container(
-          height: height,
-          width: width,
-          color: Theme.of(context).colorScheme.outline.withValues(alpha: .18),
-        ),
-        errorWidget: (context, url, error) => Container(
-          height: height,
-          width: width,
-          color: Theme.of(context).colorScheme.outline.withValues(alpha: .18),
-          child: const Icon(Icons.image_not_supported_rounded),
-        ),
-      ),
+      child: isValid
+          ? CachedNetworkImage(
+              imageUrl: url.trim(),
+              height: height,
+              width: width,
+              fit: BoxFit.cover,
+              placeholder: (context, url) => Container(
+                height: height,
+                width: width,
+                color: Theme.of(context)
+                    .colorScheme
+                    .outline
+                    .withValues(alpha: .18),
+              ),
+              errorWidget: (context, url, error) => Container(
+                height: height,
+                width: width,
+                color: Theme.of(context)
+                    .colorScheme
+                    .outline
+                    .withValues(alpha: .18),
+                child: const Icon(Icons.image_not_supported_rounded),
+              ),
+            )
+          : Container(
+              height: height,
+              width: width,
+              color: Theme.of(context)
+                  .colorScheme
+                  .outline
+                  .withValues(alpha: .18),
+              child: const Icon(Icons.image_not_supported_rounded),
+            ),
     );
   }
 }

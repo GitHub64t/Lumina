@@ -82,10 +82,11 @@ class ProfileCubit extends Cubit<ProfileState> {
     required String lastName,
     String? dateOfBirth,
   }) async {
+    final effectiveUserId = userId.isNotEmpty ? userId : (state.profile?.id ?? '');
     emit(state.copyWith(status: ProfileStatus.updating, clearError: true));
     try {
       final profile = await _updateProfileUsecase(
-        userId: userId,
+        userId: effectiveUserId,
         firstName: firstName,
         lastName: lastName,
         dateOfBirth: dateOfBirth,
@@ -103,12 +104,13 @@ class ProfileCubit extends Cubit<ProfileState> {
     required String oldPassword,
     required String newPassword,
   }) async {
+    final effectiveUserId = userId.isNotEmpty ? userId : (state.profile?.id ?? '');
     emit(
       state.copyWith(status: ProfileStatus.changingPassword, clearError: true),
     );
     try {
       await _changePasswordUsecase(
-        userId: userId,
+        userId: effectiveUserId,
         oldPassword: oldPassword,
         newPassword: newPassword,
       );

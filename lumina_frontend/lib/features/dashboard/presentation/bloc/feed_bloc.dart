@@ -83,7 +83,12 @@ class FeedBloc extends Bloc<FeedEvent, FeedState> {
     FeedNextPageRequested event,
     Emitter<FeedState> emit,
   ) async {
-    if (state.status == FeedStatus.paginating || !state.hasMore) return;
+    if (state.status == FeedStatus.loading ||
+        state.status == FeedStatus.refreshing ||
+        state.status == FeedStatus.paginating ||
+        !state.hasMore) {
+      return;
+    }
     emit(
       state.copyWith(
         status: FeedStatus.paginating,
@@ -114,11 +119,26 @@ class FeedBloc extends Bloc<FeedEvent, FeedState> {
         ),
       );
     } catch (error) {
-      emit(state.copyWith(status: FeedStatus.failure, error: error.toString()));
+      emit(
+        state.copyWith(
+          status: reset ? FeedStatus.failure : FeedStatus.pageFailure,
+          page: reset ? 1 : state.page - 1,
+          error: error.toString(),
+        ),
+      );
     }
   }
 
   void _onLiked(FeedArticleLiked event, Emitter<FeedState> emit) {
+    if (event.userId.isEmpty) {
+      emit(
+        state.copyWith(
+          status: FeedStatus.failure,
+          error: 'User session is missing. Please log in again.',
+        ),
+      );
+      return;
+    }
     final liked = {...state.likedArticleIds};
     final disliked = {...state.dislikedArticleIds}..remove(event.articleId);
     final isNowLiked = !liked.contains(event.articleId);
@@ -136,6 +156,15 @@ class FeedBloc extends Bloc<FeedEvent, FeedState> {
   }
 
   void _onDisliked(FeedArticleDisliked event, Emitter<FeedState> emit) {
+    if (event.userId.isEmpty) {
+      emit(
+        state.copyWith(
+          status: FeedStatus.failure,
+          error: 'User session is missing. Please log in again.',
+        ),
+      );
+      return;
+    }
     final disliked = {...state.dislikedArticleIds};
     final liked = {...state.likedArticleIds}..remove(event.articleId);
     final isNowDisliked = !disliked.contains(event.articleId);
@@ -155,6 +184,15 @@ class FeedBloc extends Bloc<FeedEvent, FeedState> {
   }
 
   void _onBlocked(FeedArticleBlocked event, Emitter<FeedState> emit) {
+    if (event.userId.isEmpty) {
+      emit(
+        state.copyWith(
+          status: FeedStatus.failure,
+          error: 'User session is missing. Please log in again.',
+        ),
+      );
+      return;
+    }
     final blocked = {...state.blockedArticleIds, event.articleId};
     final articles = state.articles
         .where((article) => article.id != event.articleId)
@@ -173,4 +211,3 @@ class FeedBloc extends Bloc<FeedEvent, FeedState> {
     ).catchError((_) {});
   }
 }
-

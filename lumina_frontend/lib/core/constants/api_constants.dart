@@ -22,6 +22,7 @@ class ApiConstants {
   // ── Articles ─────────────────────────────────────────────────────────────
   static const articles = '/articles';
   static const articlesPreferences = '/articles/preferences';
+  static const articlesByCategory = '/articles/category';
   static const myArticles = '/articles/me';
 
   // ── Categories ────────────────────────────────────────────────────────────
@@ -34,9 +35,6 @@ class ApiConstants {
   // ── Users / Profile ───────────────────────────────────────────────────────
   static const profile = '/users/profile';
   static const changePassword = '/users/change-password';
-
-  // ── Notifications ─────────────────────────────────────────────────────────
-  static const notifications = '/notifications';
 
   // ── Uploads ───────────────────────────────────────────────────────────────
   static const presignedUploads = '/uploads/presigned-url';

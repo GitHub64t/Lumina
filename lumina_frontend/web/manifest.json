@@ -1,6 +1,6 @@
 {
-    "name": "lumina_frontend",
-    "short_name": "lumina_frontend",
+    "name": "Lumina",
+    "short_name": "Lumina",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0175C2",

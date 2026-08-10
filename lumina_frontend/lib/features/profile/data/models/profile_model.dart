@@ -19,17 +19,35 @@ class ProfileModel extends Equatable {
   final String? dateOfBirth;
   final String? avatarUrl;
 
-  String get fullName => '$firstName $lastName'.trim();
+  String get fullName {
+    final name = '$firstName $lastName'.trim();
+    return name.isEmpty ? 'Profile' : name;
+  }
 
-  factory ProfileModel.fromJson(Map<String, dynamic> json) => ProfileModel(
-    id: json['id']?.toString() ?? json['_id']?.toString() ?? '',
-    firstName: json['firstName']?.toString() ?? '',
-    lastName: json['lastName']?.toString() ?? '',
-    email: json['email']?.toString() ?? '',
-    phone: json['phone']?.toString() ?? '',
-    dateOfBirth: json['dateOfBirth']?.toString(),
-    avatarUrl: json['avatarUrl']?.toString() ?? json['profileImage']?.toString(),
-  );
+  factory ProfileModel.fromJson(Map<String, dynamic> json) {
+    final map = (json['user'] is Map)
+        ? Map<String, dynamic>.from(json['user'] as Map)
+        : (json['profile'] is Map)
+            ? Map<String, dynamic>.from(json['profile'] as Map)
+            : json;
+
+    final first = map['firstName'] ?? map['first_name'] ?? map['name'] ?? '';
+    final last = map['lastName'] ?? map['last_name'] ?? '';
+    final email = map['email'] ?? '';
+    final phone = map['phone'] ?? map['phoneNumber'] ?? '';
+
+    return ProfileModel(
+      id: (map['id'] ?? map['_id'])?.toString() ?? '',
+      firstName: first.toString(),
+      lastName: last.toString(),
+      email: email.toString(),
+      phone: phone.toString(),
+      dateOfBirth: map['dateOfBirth']?.toString() ?? map['dob']?.toString(),
+      avatarUrl: map['avatarUrl']?.toString() ??
+          map['profileImage']?.toString() ??
+          map['avatar']?.toString(),
+    );
+  }
 
   Map<String, dynamic> toJson() => {
     'id': id,

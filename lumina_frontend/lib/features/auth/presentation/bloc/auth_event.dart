@@ -40,8 +40,14 @@ class AuthSignupRequested extends AuthEvent {
   final String password;
 
   @override
-  List<Object?> get props =>
-      [firstName, lastName, email, phone, dateOfBirth, password];
+  List<Object?> get props => [
+    firstName,
+    lastName,
+    email,
+    phone,
+    dateOfBirth,
+    password,
+  ];
 }
 
 class AuthOtpVerified extends AuthEvent {
@@ -92,4 +98,8 @@ class AuthResetPasswordRequested extends AuthEvent {
 
 class AuthLogoutRequested extends AuthEvent {
   const AuthLogoutRequested();
+}
+
+class AuthSessionExpired extends AuthEvent {
+  const AuthSessionExpired();
 }

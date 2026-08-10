@@ -1,6 +1,8 @@
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 
+import '../auth/session_controller.dart';
+import '../auth/token_manager.dart';
 import '../constants/api_constants.dart';
 import '../errors/exceptions.dart';
 import '../storage/secure_storage_service.dart';
@@ -8,11 +10,16 @@ import 'api_exception.dart';
 import 'dio_interceptor.dart';
 
 class DioClient {
-  DioClient(SecureStorageService storage)
+  DioClient(SecureStorageService storage, SessionController sessionController)
     : dio = Dio(_baseOptions()),
       _rawDio = Dio(_baseOptions()) {
+    _tokenManager = TokenManager(
+      storage: storage,
+      refreshDio: _rawDio,
+      sessionController: sessionController,
+    );
     dio.interceptors.add(
-      DioAuthInterceptor(storage: storage, refreshDio: _rawDio),
+      DioAuthInterceptor(tokenManager: _tokenManager, refreshDio: _rawDio),
     );
     if (kDebugMode) {
       dio.interceptors.add(
@@ -29,6 +36,7 @@ class DioClient {
 
   final Dio dio;
   final Dio _rawDio;
+  late final TokenManager _tokenManager;
 
   static BaseOptions _baseOptions() => BaseOptions(
     baseUrl: ApiConstants.baseUrl,
@@ -37,6 +45,7 @@ class DioClient {
     receiveTimeout: const Duration(seconds: 30),
     responseType: ResponseType.json,
     contentType: Headers.jsonContentType,
+    headers: const {'Accept': 'application/json'},
     validateStatus: (status) => status != null && status >= 200 && status < 300,
   );
 

@@ -1,3 +1,5 @@
+import 'package:flutter/foundation.dart';
+
 import '../../domain/entities/user.dart';
 import '../../domain/repository/auth_repository.dart';
 import '../datasource/auth_local_datasource.dart';
@@ -18,30 +20,35 @@ class AuthRepositoryImpl implements AuthRepository {
   @override
   Future<User> login(LoginModel model) async {
     final result = await _remote.login(model);
-    await _local.saveTokens(
-      result.token.accessToken,
-      result.token.refreshToken,
+
+    // Persist tokens immediately so every subsequent request is authenticated.
+    await _persistTokens(
+      accessToken: result.token.accessToken,
+      refreshToken: result.token.refreshToken,
+      source: 'login',
     );
+
     return result.user;
   }
 
   @override
   Future<User> signup(SignupModel model) async {
     final userStub = await _remote.signup(model);
-    // Signup only triggers OTP — no token yet.
-    // Persist email so verifyOtp / resendOtp can use it without the user re-entering it.
+    // Signup triggers OTP — no token yet.
+    // Persist email so verifyOtp / resendOtp don't need it re-entered.
     await _local.saveEmail(userStub.email);
     return userStub;
   }
 
   @override
   Future<void> refreshToken() async {
-    final refreshToken = await _local.refreshToken;
-    if (refreshToken == null || refreshToken.isEmpty) return;
-    final token = await _remote.refreshToken(refreshToken);
-    await _local.saveTokens(
-      token.accessToken,
-      token.refreshToken ?? refreshToken,
+    final stored = await _local.refreshToken;
+    if (stored == null || stored.isEmpty) return;
+    final token = await _remote.refreshToken(stored);
+    await _persistTokens(
+      accessToken: token.accessToken,
+      refreshToken: token.refreshToken ?? stored,
+      source: 'refreshToken',
     );
   }
 
@@ -49,51 +56,20 @@ class AuthRepositoryImpl implements AuthRepository {
   Future<void> verifyOtp(String code) async {
     final email = await _local.email ?? '';
     final response = await _remote.verifyOtp(email, code);
-    // Extract and persist tokens from the verify-otp response.
-    // The API may nest tokens under different keys — check all known shapes.
-    bool tokenSaved = false;
-    if (response != null && response is Map) {
-      tokenSaved = await _extractAndSaveTokens(response);
-      if (!tokenSaved) {
-        final inner = response['data'];
-        if (inner is Map) {
-          tokenSaved = await _extractAndSaveTokens(inner);
-        }
-      }
-    }
-    // Debug: log outcome so we can trace token issues in logcat.
-    assert(() {
-      if (tokenSaved) {
-        // ignore: avoid_print
-        print('[Auth] ✅ Tokens saved after OTP verification');
-      } else {
-        // ignore: avoid_print
-        print('[Auth] ⚠️  No tokens in verify-otp response — '
-            'response was: $response');
-      }
-      return true;
-    }());
-  }
 
-  /// Searches [map] for { accessToken, refreshToken } under common key names.
-  /// Returns true if an access token was found and saved.
-  Future<bool> _extractAndSaveTokens(Map<dynamic, dynamic> map) async {
-    // Try: map['token'], map['tokens'], map['accessToken'] directly
-    final candidates = [
-      map['token'],
-      map['tokens'],
-      map['data'],
-      map, // root-level accessToken
-    ];
-    for (final candidate in candidates) {
-      if (candidate is! Map) continue;
-      final access = candidate['accessToken']?.toString() ?? '';
-      if (access.isEmpty) continue;
-      final refresh = candidate['refreshToken']?.toString();
-      await _local.saveTokens(access, refresh);
-      return true;
+    // Try to extract and save tokens from the verify-otp response.
+    // Some backends return tokens here; others require a subsequent login.
+    final saved = await _saveTokensFromMap(response, source: 'verifyOtp');
+    if (!saved) {
+      // Also try one level deeper.
+      final inner = response['data'];
+      if (inner is Map) {
+        await _saveTokensFromMap(
+          Map<String, dynamic>.from(inner),
+          source: 'verifyOtp.data',
+        );
+      }
     }
-    return false;
   }
 
   @override
@@ -102,7 +78,6 @@ class AuthRepositoryImpl implements AuthRepository {
   @override
   Future<void> forgotPassword(String email) async {
     await _remote.forgotPassword(email);
-    // Store email so resend & reset flows can use it.
     await _local.saveEmail(email);
   }
 
@@ -133,9 +108,68 @@ class AuthRepositoryImpl implements AuthRepository {
     try {
       await _remote.logout();
     } catch (_) {
-      // Local token cleanup must succeed even when the API is unavailable.
+      // Local cleanup must succeed even when the API is unavailable.
     } finally {
       await _local.clear();
     }
+  }
+
+  // ── Private helpers ────────────────────────────────────────────────────────
+
+  /// Saves tokens to secure storage and logs the outcome in debug mode.
+  Future<void> _persistTokens({
+    required String accessToken,
+    String? refreshToken,
+    required String source,
+  }) async {
+    if (accessToken.isEmpty) {
+      if (kDebugMode) {
+        debugPrint('[Auth] ⚠️  _persistTokens[$source]: '
+            'accessToken is empty — NOT saving');
+      }
+      return;
+    }
+    await _local.saveTokens(accessToken, refreshToken);
+    if (kDebugMode) {
+      debugPrint('[Auth] ✅ _persistTokens[$source]: '
+          'accessToken saved (${accessToken.substring(0, accessToken.length.clamp(0, 20))}…)');
+    }
+  }
+
+  /// Searches [map] for an access token and persists it.
+  /// Returns true if a non-empty token was found and saved.
+  Future<bool> _saveTokensFromMap(
+    Map<String, dynamic> map, {
+    required String source,
+  }) async {
+    // Check all common nesting locations.
+    final candidates = <Map<dynamic, dynamic>>[
+      if (map['token'] is Map) map['token'] as Map,
+      if (map['tokens'] is Map) map['tokens'] as Map,
+      map, // accessToken directly in map
+    ];
+
+    for (final candidate in candidates) {
+      final access = candidate['accessToken']?.toString() ??
+          candidate['access_token']?.toString() ??
+          '';
+      if (access.isEmpty) continue;
+
+      final refresh = candidate['refreshToken']?.toString() ??
+          candidate['refresh_token']?.toString();
+
+      await _persistTokens(
+        accessToken: access,
+        refreshToken: refresh,
+        source: source,
+      );
+      return true;
+    }
+
+    if (kDebugMode) {
+      debugPrint('[Auth] ⚠️  _saveTokensFromMap[$source]: '
+          'no token found. Map keys: ${map.keys.toList()}');
+    }
+    return false;
   }
 }

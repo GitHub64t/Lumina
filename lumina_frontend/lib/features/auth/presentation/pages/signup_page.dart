@@ -8,6 +8,7 @@ import '../../../../core/widgets/buttons/primary_button.dart';
 import '../../../../core/widgets/chips/category_chip.dart';
 import '../../../../core/widgets/error_widgets/app_error_state.dart';
 import '../../../../core/widgets/loaders/skeleton_loader.dart';
+import '../../../../core/widgets/logo/app_logo.dart';
 import '../../../../core/widgets/textfields/app_text_field.dart';
 import '../../../../injection_container.dart';
 import '../../../preferences/presentation/bloc/preferences_cubit.dart';
@@ -102,7 +103,9 @@ class _SignupPageState extends State<SignupPage> {
               borderRadius: BorderRadius.circular(4),
               color: done || active
                   ? Theme.of(context).colorScheme.primary
-                  : Theme.of(context).colorScheme.outline.withValues(alpha: .35),
+                  : Theme.of(
+                      context,
+                    ).colorScheme.outline.withValues(alpha: .35),
             ),
           ),
         );
@@ -120,21 +123,15 @@ class _SignupPageState extends State<SignupPage> {
             BlocListener<AuthBloc, AuthState>(
               listener: (context, state) async {
                 if (state.status == AuthStatus.pendingOtp) {
-                  // Save category preferences before navigating.
-                  final preferencesCubit = context.read<PreferencesCubit>();
                   final router = GoRouter.of(context);
-                  if (state.user != null) {
-                    await preferencesCubit.save(state.user!.id);
-                  }
                   if (!mounted) return;
                   router.go('/otp');
                   return;
                 }
-                if (state.status == AuthStatus.failure &&
-                    state.error != null) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text(state.error!)),
-                  );
+                if (state.status == AuthStatus.failure && state.error != null) {
+                  ScaffoldMessenger.of(
+                    context,
+                  ).showSnackBar(SnackBar(content: Text(state.error!)));
                 }
               },
             ),
@@ -142,9 +139,9 @@ class _SignupPageState extends State<SignupPage> {
               listener: (context, state) {
                 if (state.status == PreferencesStatus.failure &&
                     state.error != null) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text(state.error!)),
-                  );
+                  ScaffoldMessenger.of(
+                    context,
+                  ).showSnackBar(SnackBar(content: Text(state.error!)));
                 }
               },
             ),
@@ -156,6 +153,10 @@ class _SignupPageState extends State<SignupPage> {
                 child: ListView(
                   shrinkWrap: true,
                   children: [
+                    const Center(
+                      child: AppLogo(size: 72),
+                    ),
+                    const SizedBox(height: 24),
                     // ── Progress indicator ─────────────────────────────────
                     _buildStepIndicator(),
                     const SizedBox(height: 28),
@@ -169,10 +170,9 @@ class _SignupPageState extends State<SignupPage> {
                     Text(
                       _subtitle,
                       style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        color: Theme.of(context)
-                            .colorScheme
-                            .onSurface
-                            .withValues(alpha: .65),
+                        color: Theme.of(
+                          context,
+                        ).colorScheme.onSurface.withValues(alpha: .65),
                       ),
                     ),
                     const SizedBox(height: 28),
@@ -207,7 +207,6 @@ class _SignupPageState extends State<SignupPage> {
                         ),
                       ),
                     ]
-
                     // ── Step 1: Personal details ───────────────────────────
                     else if (_step == 1) ...[
                       Form(
@@ -287,7 +286,6 @@ class _SignupPageState extends State<SignupPage> {
                         ),
                       ),
                     ]
-
                     // ── Step 2: Category preferences ───────────────────────
                     else ...[
                       BlocBuilder<PreferencesCubit, PreferencesState>(

@@ -3,14 +3,13 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../../core/widgets/chips/category_chip.dart';
-import '../../../../core/widgets/empty_states/app_empty_state.dart';
-import '../../../../core/widgets/error_widgets/app_error_state.dart';
-import '../../../../core/widgets/loaders/skeleton_loader.dart';
+import '../../../../core/utils/debounce.dart';
 import '../../../../core/utils/session_error_handler.dart';
-import '../../../../shared/widgets/responsive_page.dart';
+import '../../../../injection_container.dart';
 import '../../../auth/presentation/bloc/auth_bloc.dart';
+import '../../../preferences/presentation/bloc/preferences_cubit.dart';
 import '../bloc/feed_bloc.dart';
-import '../widgets/article_feed_card.dart';
+import '../widgets/article_feed_view.dart';
 
 class DashboardPage extends StatefulWidget {
   const DashboardPage({super.key});
@@ -20,199 +19,185 @@ class DashboardPage extends StatefulWidget {
 }
 
 class _DashboardPageState extends State<DashboardPage> {
-  final _scroll = ScrollController();
   final _search = TextEditingController();
-  final _categories = const [
-    'All',
-    'Design',
-    'Engineering',
-    'Product',
-    'AI',
-    'Business',
-  ];
+  final _searchDebounce = Debounce(const Duration(milliseconds: 350));
 
   @override
   void initState() {
     super.initState();
     context.read<FeedBloc>().add(const FeedRequested());
-    _scroll.addListener(() {
-      if (_scroll.position.pixels > _scroll.position.maxScrollExtent - 380) {
-        context.read<FeedBloc>().add(const FeedNextPageRequested());
-      }
-    });
   }
 
   @override
   void dispose() {
-    _scroll.dispose();
     _search.dispose();
+    _searchDebounce.dispose();
     super.dispose();
+  }
+
+  Future<void> _refreshFeed() async {
+    final bloc = context.read<FeedBloc>()..add(const FeedRefreshed());
+    await bloc.stream.firstWhere(
+      (state) =>
+          state.status != FeedStatus.refreshing &&
+          state.status != FeedStatus.loading,
+    );
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => context.go('/articles/create'),
-        icon: const Icon(Icons.edit_rounded),
-        label: const Text('Write'),
-      ),
-      body: BlocListener<FeedBloc, FeedState>(
-        listenWhen: (previous, current) => previous.status != current.status,
-        listener: (context, state) {
-          if (state.status == FeedStatus.failure && state.error != null) {
-            SessionErrorHandler.handle(context, state.error);
-            ScaffoldMessenger.of(
-              context,
-            ).showSnackBar(SnackBar(content: Text(state.error!)));
-          }
-        },
-        child: ResponsivePage(
+    return BlocProvider(
+      // Load real categories for the filter chips.
+      create: (_) => PreferencesCubit(sl.preferencesRepository)..load(),
+      child: Scaffold(
+        floatingActionButton: FloatingActionButton.extended(
+          onPressed: () => context.go('/articles/create'),
+          icon: const Icon(Icons.edit_rounded),
+          label: const Text('Write'),
+        ),
+        body: BlocListener<FeedBloc, FeedState>(
+          listenWhen: (previous, current) => previous.status != current.status,
+          listener: (context, state) {
+            if (state.status == FeedStatus.failure && state.error != null) {
+              SessionErrorHandler.handle(context, state.error);
+              ScaffoldMessenger.of(
+                context,
+              ).showSnackBar(SnackBar(content: Text(state.error!)));
+            }
+            if (state.status == FeedStatus.pageFailure && state.error != null) {
+              ScaffoldMessenger.of(
+                context,
+              ).showSnackBar(SnackBar(content: Text(state.error!)));
+            }
+          },
           child: BlocBuilder<FeedBloc, FeedState>(
-            builder: (context, state) {
-              if (state.status == FeedStatus.loading) {
-                return const SkeletonLoader();
-              }
-              if (state.status == FeedStatus.failure &&
-                  state.articles.isEmpty) {
-                return AppErrorState(
-                  message: state.error ?? 'Unable to load feed',
-                  onRetry: () =>
-                      context.read<FeedBloc>().add(const FeedRequested()),
-                );
-              }
-              if (state.status == FeedStatus.empty) {
-                return RefreshIndicator(
-                  onRefresh: () async =>
-                      context.read<FeedBloc>().add(const FeedRefreshed()),
-                  child: ListView(
-                    children: const [
-                      SizedBox(height: 160),
-                      AppEmptyState(
-                        title: 'No articles yet',
-                        message:
-                            'Change filters or publish the first article in this category.',
-                      ),
-                    ],
-                  ),
-                );
-              }
-              return RefreshIndicator(
-                onRefresh: () async =>
-                    context.read<FeedBloc>().add(const FeedRefreshed()),
-                child: CustomScrollView(
-                  controller: _scroll,
-                  slivers: [
-                    SliverToBoxAdapter(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Your feed',
-                            style: Theme.of(context).textTheme.headlineMedium,
-                          ),
-                          const SizedBox(height: 8),
-                          const Text(
-                            'Personalized articles, trending categories, and quick publishing tools.',
-                          ),
-                          const SizedBox(height: 20),
-                          TextField(
-                            controller: _search,
-                            onChanged: (value) => context.read<FeedBloc>().add(
-                              FeedSearchChanged(value),
-                            ),
-                            decoration: const InputDecoration(
-                              prefixIcon: Icon(Icons.search_rounded),
-                              hintText: 'Search articles, authors, or topics',
-                            ),
-                          ),
-                          const SizedBox(height: 16),
-                          Wrap(
-                            spacing: 10,
-                            runSpacing: 10,
-                            children: [
-                              for (final category in _categories)
-                                CategoryChip(
-                                  label: category,
-                                  selected: state.category == category,
-                                  onSelected: (_) => context
-                                      .read<FeedBloc>()
-                                      .add(FeedCategoryChanged(category)),
-                                ),
-                            ],
-                          ),
-                          const SizedBox(height: 18),
-                        ],
-                      ),
-                    ),
-                    SliverList.separated(
-                      itemBuilder: (context, index) {
-                        final article = state.articles[index];
-                        return ArticleFeedCard(
-                          article: article,
-                          isLiked: state.likedArticleIds.contains(article.id),
-                          isDisliked: state.dislikedArticleIds.contains(
-                            article.id,
-                          ),
-                          onLike: () => context.read<FeedBloc>().add(
-                            FeedArticleLiked(
-                              userId: context
-                                  .read<AuthBloc>()
-                                  .state
-                                  .user
-                                  ?.id ?? '',
-                              articleId: article.id,
-                            ),
-                          ),
-                          onDislike: () => context.read<FeedBloc>().add(
-                            FeedArticleDisliked(
-                              userId: context
-                                  .read<AuthBloc>()
-                                  .state
-                                  .user
-                                  ?.id ?? '',
-                              articleId: article.id,
-                            ),
-                          ),
-                          onBlock: () {
-                            context.read<FeedBloc>().add(
-                              FeedArticleBlocked(
-                                userId: context
-                                    .read<AuthBloc>()
-                                    .state
-                                    .user
-                                    ?.id ?? '',
-                                articleId: article.id,
-                              ),
-                            );
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text(
-                                  'Article hidden from this session',
-                                ),
-                              ),
-                            );
-                          },
-                        );
-                      },
-                      separatorBuilder: (context, index) =>
-                          const SizedBox(height: 14),
-                      itemCount: state.articles.length,
-                    ),
-                    if (state.status == FeedStatus.paginating)
-                      const SliverToBoxAdapter(
-                        child: Padding(
-                          padding: EdgeInsets.all(24),
-                          child: Center(child: CircularProgressIndicator()),
-                        ),
-                      ),
-                  ],
+            builder: (context, feedState) {
+              return ArticleFeedView(
+                title: 'Your feed',
+                subtitle: 'Personalised articles based on your interests.',
+                articles: feedState.articles,
+                isLoading: feedState.status == FeedStatus.loading,
+                isFailure: feedState.status == FeedStatus.failure,
+                isEmpty: feedState.status == FeedStatus.empty,
+                isPaginating: feedState.status == FeedStatus.paginating,
+                errorMessage: feedState.error,
+                emptyTitle: 'Your feed is empty',
+                emptyMessage:
+                    'No articles match your current preferences.\n'
+                    'Update your interests to see personalised content.',
+                emptyAction: TextButton.icon(
+                  onPressed: () => context.go('/preferences'),
+                  icon: const Icon(Icons.tune_rounded),
+                  label: const Text('Set preferences'),
                 ),
+                headerControls: _FeedHeaderControls(
+                  searchController: _search,
+                  searchDebounce: _searchDebounce,
+                  feedState: feedState,
+                ),
+                onRefresh: _refreshFeed,
+                onRetry: () =>
+                    context.read<FeedBloc>().add(const FeedRequested()),
+                onLoadMore: () =>
+                    context.read<FeedBloc>().add(const FeedNextPageRequested()),
+                likedArticleIds: feedState.likedArticleIds,
+                dislikedArticleIds: feedState.dislikedArticleIds,
+                onLike: (article) => context.read<FeedBloc>().add(
+                  FeedArticleLiked(
+                    userId: context.read<AuthBloc>().state.user?.id ?? '',
+                    articleId: article.id,
+                  ),
+                ),
+                onDislike: (article) => context.read<FeedBloc>().add(
+                  FeedArticleDisliked(
+                    userId: context.read<AuthBloc>().state.user?.id ?? '',
+                    articleId: article.id,
+                  ),
+                ),
+                onBlock: (article) {
+                  context.read<FeedBloc>().add(
+                    FeedArticleBlocked(
+                      userId: context.read<AuthBloc>().state.user?.id ?? '',
+                      articleId: article.id,
+                    ),
+                  );
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Article hidden from this session'),
+                    ),
+                  );
+                },
               );
             },
           ),
         ),
       ),
+    );
+  }
+}
+
+class _FeedHeaderControls extends StatelessWidget {
+  const _FeedHeaderControls({
+    required this.searchController,
+    required this.searchDebounce,
+    required this.feedState,
+  });
+
+  final TextEditingController searchController;
+  final Debounce searchDebounce;
+  final FeedState feedState;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        TextField(
+          controller: searchController,
+          onChanged: (value) => searchDebounce(
+            () => context.read<FeedBloc>().add(FeedSearchChanged(value)),
+          ),
+          decoration: const InputDecoration(
+            prefixIcon: Icon(Icons.search_rounded),
+            hintText: 'Search articles, authors, or topics',
+          ),
+        ),
+        const SizedBox(height: 16),
+        BlocBuilder<PreferencesCubit, PreferencesState>(
+          builder: (context, prefState) {
+            final categories = prefState.categories;
+            if (categories.isEmpty) {
+              return const SizedBox.shrink();
+            }
+            return SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: [
+                  CategoryChip(
+                    label: 'All',
+                    selected: feedState.category == 'All',
+                    onSelected: (_) => context.read<FeedBloc>().add(
+                      const FeedCategoryChanged('All'),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  ...categories.map(
+                    (cat) => Padding(
+                      padding: const EdgeInsets.only(right: 10),
+                      child: CategoryChip(
+                        label: cat.name,
+                        selected: feedState.category == cat.id,
+                        onSelected: (_) => context.read<FeedBloc>().add(
+                          FeedCategoryChanged(cat.id),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            );
+          },
+        ),
+      ],
     );
   }
 }

@@ -8,6 +8,7 @@ class Article extends Equatable {
     required this.content,
     required this.author,
     this.categoryId,
+    this.categoryName,
     this.imageUrl,
     required this.publishedAt,
     this.readMinutes = 0,
@@ -20,9 +21,12 @@ class Article extends Equatable {
   final String summary;
   /// Backend field name: content (was: body).
   final String content;
+  /// Formatted author full name.
   final String author;
-  /// Backend field name: categoryId (was: category string).
+  /// Raw category ID (UUID).
   final String? categoryId;
+  /// Human-readable category name for display.
+  final String? categoryName;
   final String? imageUrl;
   final DateTime publishedAt;
   final int readMinutes;
@@ -34,7 +38,7 @@ class Article extends Equatable {
 
   @override
   List<Object?> get props => [
-    id, title, summary, content, author, categoryId,
+    id, title, summary, content, author, categoryId, categoryName,
     imageUrl, publishedAt, readMinutes, likes, dislikes,
   ];
 }

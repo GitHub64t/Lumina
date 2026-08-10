@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../../core/utils/validators.dart';
 import '../../../../core/widgets/buttons/primary_button.dart';
+import '../../../../core/widgets/logo/app_logo.dart';
 import '../../../../core/widgets/textfields/app_text_field.dart';
 import '../../../../shared/widgets/responsive_page.dart';
 import '../bloc/auth_bloc.dart';
@@ -50,6 +51,10 @@ class _LoginPageState extends State<LoginPage> {
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    const Center(
+                      child: AppLogo(size: 80),
+                    ),
+                    const SizedBox(height: 24),
                     Text(
                       'Welcome back',
                       style: Theme.of(context).textTheme.headlineMedium,

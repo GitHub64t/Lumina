@@ -11,9 +11,8 @@ class AppShell extends StatelessWidget {
 
   static const destinations = [
     _Destination('Feed', AppIcons.home, '/dashboard'),
-    _Destination('Search', AppIcons.search, '/search'),
     _Destination('Create', AppIcons.create, '/articles/create'),
-    _Destination('Alerts', AppIcons.notifications, '/notifications'),
+    _Destination('My Articles', AppIcons.articles, '/my-articles'),
     _Destination('Settings', AppIcons.settings, '/settings'),
   ];
 

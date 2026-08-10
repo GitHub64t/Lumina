@@ -1,5 +1,6 @@
 import 'package:get_it/get_it.dart';
 
+import 'core/auth/session_controller.dart';
 import 'core/network/dio_client.dart';
 import 'core/storage/secure_storage_service.dart';
 import 'features/article/data/datasource/article_remote_datasource.dart';
@@ -9,6 +10,8 @@ import 'features/article/domain/usecases/create_article_usecase.dart';
 import 'features/article/domain/usecases/delete_article_usecase.dart';
 import 'features/article/domain/usecases/edit_article_usecase.dart';
 import 'features/article/domain/usecases/get_articles_usecase.dart';
+import 'features/article/domain/usecases/get_my_articles_usecase.dart';
+import 'features/article/presentation/bloc/my_articles_cubit.dart';
 import 'features/auth/data/datasource/auth_local_datasource.dart';
 import 'features/auth/data/datasource/auth_remote_datasource.dart';
 import 'features/auth/data/repository/auth_repository_impl.dart';
@@ -53,6 +56,7 @@ class InjectionContainer {
   final GetIt _getIt;
 
   SecureStorageService get storage => _getIt<SecureStorageService>();
+  SessionController get sessionController => _getIt<SessionController>();
   DioClient get dioClient => _getIt<DioClient>();
   AuthRepository get authRepository => _getIt<AuthRepository>();
   ArticleRepository get articleRepository => _getIt<ArticleRepository>();
@@ -62,6 +66,7 @@ class InjectionContainer {
   ReactionsRepository get reactionsRepository => _getIt<ReactionsRepository>();
   AuthBloc get authBloc => _getIt<AuthBloc>();
   FeedBloc get feedBloc => _getIt<FeedBloc>();
+  MyArticlesCubit get myArticlesCubit => _getIt<MyArticlesCubit>();
   ThemeCubit get themeCubit => _getIt<ThemeCubit>();
 
   T call<T extends Object>() => _getIt<T>();
@@ -72,7 +77,10 @@ class InjectionContainer {
     _getIt.registerLazySingleton<SecureStorageService>(
       SecureStorageService.new,
     );
-    _getIt.registerLazySingleton<DioClient>(() => DioClient(_getIt()));
+    _getIt.registerLazySingleton<SessionController>(SessionController.new);
+    _getIt.registerLazySingleton<DioClient>(
+      () => DioClient(_getIt(), _getIt()),
+    );
 
     // ── Data sources ──────────────────────────────────────────────────────────
     _getIt.registerLazySingleton<AuthLocalDatasource>(
@@ -123,11 +131,11 @@ class InjectionContainer {
     _getIt.registerLazySingleton<ForgotPasswordUsecase>(
       () => ForgotPasswordUsecase(_getIt()),
     );
-    _getIt.registerLazySingleton<ResendForgotPasswordOtpUsecase>(
-      () => ResendForgotPasswordOtpUsecase(_getIt()),
-    );
     _getIt.registerLazySingleton<ResetPasswordUsecase>(
       () => ResetPasswordUsecase(_getIt()),
+    );
+    _getIt.registerLazySingleton<ResendForgotPasswordOtpUsecase>(
+      () => ResendForgotPasswordOtpUsecase(_getIt()),
     );
     _getIt.registerLazySingleton<RestoreSessionUsecase>(
       () => RestoreSessionUsecase(_getIt()),
@@ -140,6 +148,9 @@ class InjectionContainer {
     // ── Article use cases ─────────────────────────────────────────────────────
     _getIt.registerLazySingleton<GetArticlesUsecase>(
       () => GetArticlesUsecase(_getIt()),
+    );
+    _getIt.registerLazySingleton<GetMyArticlesUsecase>(
+      () => GetMyArticlesUsecase(_getIt()),
     );
     _getIt.registerLazySingleton<CreateArticleUsecase>(
       () => CreateArticleUsecase(_getIt()),
@@ -189,10 +200,11 @@ class InjectionContainer {
         verifyOtpUsecase: _getIt(),
         resendOtpUsecase: _getIt(),
         forgotPasswordUsecase: _getIt(),
-        resendForgotPasswordOtpUsecase: _getIt(),
         resetPasswordUsecase: _getIt(),
         restoreSessionUsecase: _getIt(),
         logoutUsecase: _getIt(),
+        sessionController: _getIt(),
+        resendForgotPasswordOtpUsecase: _getIt(),
       )..add(const AuthStarted()),
     );
     _getIt.registerLazySingleton<FeedBloc>(
@@ -202,6 +214,14 @@ class InjectionContainer {
         blockArticleUsecase: _getIt(),
       ),
     );
+    _getIt.registerFactory<MyArticlesCubit>(
+      () => MyArticlesCubit(
+        _getIt(),
+        reactArticleUsecase: _getIt(),
+        blockArticleUsecase: _getIt(),
+      ),
+    );
+    _getIt.registerLazySingleton<ThemeCubit>(() => ThemeCubit(_getIt()));
     _getIt.registerFactory<ProfileCubit>(
       () => ProfileCubit(
         getProfileUsecase: _getIt(),
@@ -209,6 +229,5 @@ class InjectionContainer {
         changePasswordUsecase: _getIt(),
       ),
     );
-    _getIt.registerLazySingleton<ThemeCubit>(() => ThemeCubit(_getIt()));
   }
 }

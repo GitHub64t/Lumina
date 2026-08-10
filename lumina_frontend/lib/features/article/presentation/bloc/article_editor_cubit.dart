@@ -2,6 +2,8 @@ import 'package:equatable/equatable.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:image_picker/image_picker.dart';
 
+import '../../../../core/storage/secure_storage_service.dart';
+import '../../../../core/utils/jwt_utils.dart';
 import '../../../../shared/models/article.dart';
 import '../../domain/repository/article_repository.dart';
 
@@ -50,9 +52,12 @@ class ArticleEditorState extends Equatable {
 }
 
 class ArticleEditorCubit extends Cubit<ArticleEditorState> {
-  ArticleEditorCubit(this._repository) : super(const ArticleEditorState());
+  ArticleEditorCubit(this._repository, {SecureStorageService? storage})
+    : _storage = storage,
+      super(const ArticleEditorState());
 
   final ArticleRepository _repository;
+  final SecureStorageService? _storage;
   final ImagePicker _picker = ImagePicker();
 
   Future<void> load(String? articleId) async {
@@ -90,29 +95,52 @@ class ArticleEditorCubit extends Cubit<ArticleEditorState> {
     required String content,
     required String categoryId,
   }) async {
+    // If the UI couldn't resolve a userId from the auth state, fall back to
+    // decoding it from the stored JWT access token (sub claim).
+    String resolvedUserId = userId;
+    if (resolvedUserId.isEmpty) {
+      final token = await _storage?.accessToken;
+      resolvedUserId = userIdFromJwt(token) ?? '';
+    }
+
+    if (resolvedUserId.isEmpty) {
+      emit(
+        state.copyWith(
+          status: ArticleEditorStatus.failure,
+          error: 'User session is missing. Please log in again.',
+        ),
+      );
+      return;
+    }
+
     emit(
       state.copyWith(status: ArticleEditorStatus.submitting, clearError: true),
     );
     try {
       if (articleId == null) {
-        await _repository.createArticle(
-          userId: userId,
+        final article = await _repository.createArticle(
+          userId: resolvedUserId,
           title: title,
           content: content,
           categoryId: categoryId,
           image: state.image,
         );
+        emit(
+          state.copyWith(status: ArticleEditorStatus.success, article: article),
+        );
       } else {
-        await _repository.editArticle(
-          userId: userId,
+        final article = await _repository.editArticle(
+          userId: resolvedUserId,
           id: articleId,
           title: title,
           content: content,
           categoryId: categoryId,
           image: state.image,
         );
+        emit(
+          state.copyWith(status: ArticleEditorStatus.success, article: article),
+        );
       }
-      emit(state.copyWith(status: ArticleEditorStatus.success));
     } catch (error) {
       emit(
         state.copyWith(

@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:go_router/go_router.dart';
 
+import '../../../../core/utils/jwt_utils.dart';
 import '../../../../core/widgets/buttons/primary_button.dart';
 import '../../../../core/widgets/chips/category_chip.dart';
 import '../../../../core/widgets/empty_states/app_empty_state.dart';
@@ -10,6 +12,7 @@ import '../../../../core/utils/session_error_handler.dart';
 import '../../../../injection_container.dart';
 import '../../../../shared/widgets/responsive_page.dart';
 import '../../../auth/presentation/bloc/auth_bloc.dart';
+import '../../../dashboard/presentation/bloc/feed_bloc.dart';
 import '../bloc/preferences_cubit.dart';
 
 class PreferencesPage extends StatelessWidget {
@@ -23,9 +26,19 @@ class PreferencesPage extends StatelessWidget {
         body: BlocConsumer<PreferencesCubit, PreferencesState>(
           listener: (context, state) {
             if (state.status == PreferencesStatus.saved) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Preferences saved')),
-              );
+              // Refresh the feed so new preferences take effect immediately.
+              context.read<FeedBloc>().add(const FeedRefreshed());
+              ScaffoldMessenger.of(context)
+                ..hideCurrentSnackBar()
+                ..showSnackBar(
+                  SnackBar(
+                    content: const Text('Preferences saved!'),
+                    action: SnackBarAction(
+                      label: 'Go to feed',
+                      onPressed: () => context.go('/dashboard'),
+                    ),
+                  ),
+                );
             }
             if (state.status == PreferencesStatus.failure &&
                 state.error != null) {
@@ -91,9 +104,17 @@ class PreferencesPage extends StatelessWidget {
                     isLoading: state.status == PreferencesStatus.saving,
                     onPressed: state.selectedIds.isEmpty
                         ? null
-                        : () {
-                            final userId =
+                        : () async {
+                            // Primary: read from auth state.
+                            // Fallback: decode from JWT token.
+                            var userId =
                                 context.read<AuthBloc>().state.user?.id ?? '';
+                            if (userId.isEmpty) {
+                              final token =
+                                  await sl.storage.accessToken;
+                              userId = userIdFromJwt(token) ?? '';
+                            }
+                            if (!context.mounted) return;
                             context.read<PreferencesCubit>().save(userId);
                           },
                   ),

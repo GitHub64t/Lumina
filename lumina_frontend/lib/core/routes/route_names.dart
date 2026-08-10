@@ -13,8 +13,6 @@ class RouteNames {
   static const createArticle = '/articles/create';
   static const editArticle = '/articles/:id/edit';
   static const myArticles = '/my-articles';
-  static const search = '/search';
-  static const notifications = '/notifications';
   static const preferences = '/preferences';
   static const profile = '/profile';
   static const settings = '/settings';

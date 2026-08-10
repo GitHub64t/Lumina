@@ -7,6 +7,7 @@ enum FeedStatus {
   success,
   empty,
   paginating,
+  pageFailure,
   failure,
 }
 

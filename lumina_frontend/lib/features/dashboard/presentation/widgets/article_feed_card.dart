@@ -93,7 +93,12 @@ class _CardContent extends StatelessWidget {
           spacing: 8,
           runSpacing: 8,
           children: [
-            Chip(label: Text(article.categoryId ?? 'General')),
+            Chip(
+              label: Text(
+                // Show human-readable name; fall back gracefully.
+                article.categoryName ?? article.categoryId ?? 'General',
+              ),
+            ),
             Chip(label: Text('${article.readMinutes} min read')),
           ],
         ),
@@ -104,7 +109,14 @@ class _CardContent extends StatelessWidget {
         const SizedBox(height: 16),
         Row(
           children: [
-            CircleAvatar(child: Text(article.author.characters.first)),
+            // Safe first-letter avatar: avoid empty-string crash.
+            CircleAvatar(
+              child: Text(
+                article.author.isNotEmpty
+                    ? article.author[0].toUpperCase()
+                    : '?',
+              ),
+            ),
             const SizedBox(width: 10),
             Expanded(
               child: Text(

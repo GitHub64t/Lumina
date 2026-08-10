@@ -85,6 +85,15 @@ class PreferencesCubit extends Cubit<PreferencesState> {
 
   /// [userId] is required by SaveUserPreferencesDto.
   Future<void> save(String userId) async {
+    if (userId.isEmpty) {
+      emit(
+        state.copyWith(
+          status: PreferencesStatus.failure,
+          error: 'User session is missing. Please log in again.',
+        ),
+      );
+      return;
+    }
     emit(state.copyWith(status: PreferencesStatus.saving, clearError: true));
     try {
       final preferences = await _repository.savePreferences(

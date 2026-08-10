@@ -1,5 +1,8 @@
+import 'package:dio/dio.dart';
+
 import '../../../../core/constants/api_constants.dart';
 import '../../../../core/network/dio_client.dart';
+import '../../../../core/network/api_response_parser.dart';
 import '../models/profile_model.dart';
 
 class ProfileRemoteDatasource {
@@ -11,7 +14,7 @@ class ProfileRemoteDatasource {
     final response = await _client.get<Map<String, dynamic>>(
       ApiConstants.profile,
     );
-    return ProfileModel.fromJson(_extractProfile(response.data as Map));
+    return ProfileModel.fromJson(_extractProfile(response.data));
   }
 
   /// UpdateProfileDto: { userId, firstName, lastName, dateOfBirth }
@@ -21,16 +24,31 @@ class ProfileRemoteDatasource {
     required String lastName,
     String? dateOfBirth,
   }) async {
-    final response = await _client.post<Map<String, dynamic>>(
-      ApiConstants.profile,
-      data: {
-        'userId': userId,
-        'firstName': firstName,
-        'lastName': lastName,
-        'dateOfBirth': ?dateOfBirth,
-      },
-    );
-    return ProfileModel.fromJson(_extractProfile(response.data as Map));
+    final body = {
+      if (userId.isNotEmpty) 'userId': userId,
+      'firstName': firstName,
+      'lastName': lastName,
+      if (dateOfBirth != null && dateOfBirth.isNotEmpty)
+        'dateOfBirth': dateOfBirth,
+    };
+
+    try {
+      final response = await _client.patch<Map<String, dynamic>>(
+        ApiConstants.profile,
+        data: body,
+      );
+      return ProfileModel.fromJson(_extractProfile(response.data));
+    } on DioException catch (e) {
+      // Fallback to POST if server returns 405 Method Not Allowed or 404
+      if (e.response?.statusCode == 405 || e.response?.statusCode == 404) {
+        final response = await _client.post<Map<String, dynamic>>(
+          ApiConstants.profile,
+          data: body,
+        );
+        return ProfileModel.fromJson(_extractProfile(response.data));
+      }
+      rethrow;
+    }
   }
 
   /// ChangePasswordDto: { userId, oldPassword, newPassword }
@@ -38,24 +56,41 @@ class ProfileRemoteDatasource {
     required String userId,
     required String oldPassword,
     required String newPassword,
-  }) {
-    return _client.post(
-      ApiConstants.changePassword,
-      data: {
-        'userId': userId,
-        'oldPassword': oldPassword,
-        'newPassword': newPassword,
-      },
-    );
+  }) async {
+    final body = {
+      if (userId.isNotEmpty) 'userId': userId,
+      'oldPassword': oldPassword,
+      'newPassword': newPassword,
+      'currentPassword': oldPassword,
+    };
+
+    try {
+      await _client.post(
+        ApiConstants.changePassword,
+        data: body,
+      );
+    } on DioException catch (e) {
+      if (e.response?.statusCode == 405 || e.response?.statusCode == 404) {
+        await _client.patch(
+          ApiConstants.changePassword,
+          data: body,
+        );
+      } else {
+        rethrow;
+      }
+    }
   }
 
-  Map<String, dynamic> _extractProfile(Map<dynamic, dynamic> data) {
-    final map = Map<String, dynamic>.from(data);
-    final payload = map['data'] is Map
-        ? Map<String, dynamic>.from(map['data'] as Map)
-        : map;
-    return payload['profile'] is Map
-        ? Map<String, dynamic>.from(payload['profile'] as Map)
-        : payload;
+  Map<String, dynamic> _extractProfile(Object? data) {
+    final payload = ApiResponseParser.unwrap(data);
+    if (payload is Map) {
+      for (final key in ['user', 'profile']) {
+        if (payload[key] is Map) {
+          return Map<String, dynamic>.from(payload[key] as Map);
+        }
+      }
+      return Map<String, dynamic>.from(payload);
+    }
+    return ApiResponseParser.map(data, nestedKey: 'profile');
   }
 }

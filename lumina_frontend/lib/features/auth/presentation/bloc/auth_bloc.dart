@@ -1,6 +1,9 @@
+import 'dart:async';
+
 import 'package:equatable/equatable.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
+import '../../../../core/auth/session_controller.dart';
 import '../../data/models/login_model.dart';
 import '../../data/models/signup_model.dart';
 import '../../domain/entities/user.dart';
@@ -28,6 +31,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     required ResetPasswordUsecase resetPasswordUsecase,
     required RestoreSessionUsecase restoreSessionUsecase,
     required LogoutUsecase logoutUsecase,
+    required SessionController sessionController,
   }) : _loginUsecase = loginUsecase,
        _signupUsecase = signupUsecase,
        _verifyOtpUsecase = verifyOtpUsecase,
@@ -37,6 +41,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
        _resetPasswordUsecase = resetPasswordUsecase,
        _restoreSessionUsecase = restoreSessionUsecase,
        _logoutUsecase = logoutUsecase,
+       _sessionController = sessionController,
        super(const AuthState()) {
     on<AuthStarted>(_onStarted);
     on<AuthLoginRequested>(_onLogin);
@@ -47,6 +52,10 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     on<AuthForgotPasswordOtpResent>(_onResendForgotPasswordOtp);
     on<AuthResetPasswordRequested>(_onResetPassword);
     on<AuthLogoutRequested>(_onLogout);
+    on<AuthSessionExpired>(_onSessionExpired);
+    _sessionSubscription = _sessionController.sessionExpired.listen(
+      (_) => add(const AuthSessionExpired()),
+    );
   }
 
   final LoginUsecase _loginUsecase;
@@ -58,6 +67,8 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
   final ResetPasswordUsecase _resetPasswordUsecase;
   final RestoreSessionUsecase _restoreSessionUsecase;
   final LogoutUsecase _logoutUsecase;
+  final SessionController _sessionController;
+  late final StreamSubscription<SessionExpiredEvent> _sessionSubscription;
 
   Future<void> _onStarted(AuthStarted event, Emitter<AuthState> emit) async {
     emit(state.copyWith(status: AuthStatus.checking));
@@ -125,13 +136,13 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       if (user != null) {
         emit(state.copyWith(status: AuthStatus.authenticated, user: user));
       } else {
-        // Tokens were not in the OTP response (some backends return them
-        // only on first login). Keep the stub user from signup and mark
-        // authenticated — the user is verified at this point.
+        // Verification succeeded, but the API did not return tokens. Keep the
+        // app unauthenticated so protected requests are not sent without auth.
         emit(
           state.copyWith(
-            status: AuthStatus.authenticated,
-            user: state.user, // stub UserModel from signup
+            status: AuthStatus.unauthenticated,
+            user: state.user,
+            error: 'Verification complete. Please log in.',
           ),
         );
       }
@@ -214,5 +225,15 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
   ) async {
     await _logoutUsecase();
     emit(const AuthState(status: AuthStatus.unauthenticated));
+  }
+
+  void _onSessionExpired(AuthSessionExpired event, Emitter<AuthState> emit) {
+    emit(const AuthState(status: AuthStatus.unauthenticated));
+  }
+
+  @override
+  Future<void> close() {
+    _sessionSubscription.cancel();
+    return super.close();
   }
 }
